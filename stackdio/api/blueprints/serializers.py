@@ -284,6 +284,7 @@ class BlueprintSerializer(StackdioHyperlinkedModelSerializer):
             'url',
             'title',
             'description',
+            'cost',
             'create_users',
             'stack_count',
             'label_list',

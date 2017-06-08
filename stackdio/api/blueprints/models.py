@@ -35,6 +35,11 @@ from stackdio.core.fields import JSONField
 from stackdio.core.models import SearchQuerySet
 from stackdio.core.notifications.decorators import add_subscribed_channels
 
+import requests
+import json
+import boto
+from stackdio.api.cloud.providers.aws import AWSCloudProvider
+
 PROTOCOL_CHOICES = [
     ('tcp', 'TCP'),
     ('udp', 'UDP'),
@@ -113,6 +118,37 @@ class Blueprint(TimeStampedModel, TitleSlugDescriptionModel):
     def host_definition_count(self):
         return self.host_definitions.count()
 
+    def cost(self):
+        contents = requests.get('http://a0.awsstatic.com/pricing/1/ec2/linux-od.js').content.decode('utf8')
+        begin = contents.find('callback(') + 9
+        end = contents.rfind(")")
+        contents = contents[begin:end]
+        od_prices = json.loads(contents)
+
+        sum = 0.0
+        ebs = 0
+
+        provider = self.host_definitions.first().size.provider
+
+        for host_definition in self.host_definitions.all():
+            count = host_definition.count
+            size = host_definition.size.instance_id
+
+            for type in od_prices["config"]["regions"][0]["instanceTypes"][0]["sizes"]:
+                if type["size"] == size:
+                    sum = sum + count*float(type["valueColumns"][0]["prices"]["USD"])
+
+            for volume in  host_definition.volumes.all():
+                ebs = ebs + volume.size_in_gb
+
+        hourly_ebs = ebs*0.1/31/24
+        if hourly_ebs < 0.01:
+            hourly_ebs = 0
+        hourly_ebs = round(hourly_ebs, 3)
+        sum = sum + hourly_ebs
+
+        return sum
+
     @django_cache('{ctype}-{id}-label-list')
     def get_cached_label_list(self):
         return self.labels.all()
@@ -161,7 +197,7 @@ class BlueprintHostDefinition(TimeStampedModel, TitleDescriptionModel):
     size = models.ForeignKey('cloud.CloudInstanceSize')
 
     # The default availability zone for the host
-    # Only for EC2 classic
+    # Only for EC2  
     zone = models.ForeignKey('cloud.CloudZone', null=True, blank=True)
 
     # The subnet id for VPC enabled accounts

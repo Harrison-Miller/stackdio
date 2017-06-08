@@ -53,6 +53,7 @@ define([
         // Editable fields
         this.title = ko.observable();
         this.description = ko.observable();
+        this.cost = ko.observable();
         this.createUsers = ko.observable();
         this.labelList = ko.observable();
         this.stackCount = ko.observable();
@@ -74,6 +75,7 @@ define([
     Blueprint.prototype._process = function (raw) {
         this.title(raw.title);
         this.description(raw.description);
+        this.cost("$"+raw.cost+" per hour")
         this.createUsers(raw.create_users);
         this.labelList(raw.label_list);
         this.stackCount(raw.stack_count);
