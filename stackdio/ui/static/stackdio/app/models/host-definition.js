@@ -71,7 +71,7 @@ define([
     HostDefinition.prototype._process = function (raw) {
         this.title(raw.title);
         this.description(raw.description);
-        this.cost(raw.cost);
+        this.cost(Math.floor(raw.cost*1000)/1000);
         this.cloudImage(raw.cloud_image);
         this.count(raw.count);
         this.hostnameTemplate(raw.hostname_template);

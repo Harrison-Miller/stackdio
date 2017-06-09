@@ -120,7 +120,6 @@ class Blueprint(TimeStampedModel, TitleSlugDescriptionModel):
         for host_definition in self.host_definitions.all():
             if host_definition.cost is None:
                 host_definition.recalculate_cost()
-                host_definition.save()
             sum += float(host_definition.cost)
 
         return sum
@@ -204,6 +203,7 @@ class BlueprintHostDefinition(TimeStampedModel, TitleDescriptionModel):
         driver = self.cloud_image.get_driver()
         amount = driver.get_host_definition_cost(self)
         self.cost = amount
+        self.save()
 
     @property
     def formula_components_count(self):

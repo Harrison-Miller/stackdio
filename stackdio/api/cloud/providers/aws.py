@@ -26,6 +26,7 @@ import re
 import stat
 from time import sleep
 from uuid import uuid4
+from datetime import datetime, timedelta
 
 import json
 import requests
@@ -808,11 +809,32 @@ class AWSCloudProvider(BaseCloudProvider):
         # update hosts to remove fqdn
         hosts.update(fqdn='')
 
-    def get_spot_instance_cost(self, instance_type):
-        return 0.1
+    def get_spot_instance_cost(self, host):
+        subnet = self.get_vpc_subnets([host.subnet_id])[0]
+
+        az = subnet.availability_zone
+        instance_type = host.size.instance_id
+        end_time = datetime.now()
+        start_time = end_time - timedelta(days=7)
+
+        ec2 = self.connect_ec2()
+        prices = ec2.get_spot_price_history(
+            end_time=end_time.isoformat(),
+            start_time=start_time.isoformat(),
+            product_description='Linux/UNIX',
+            instance_type=instance_type,
+            availability_zone=az)
+
+        avg = 0.0
+        for marker in prices:
+            avg += float(marker.price)
+
+        avg /= len(prices)
+
+        return avg
 
     #this is still highly inefficient, it might be best just to store the cost in the db and hope it doesn't change
-    def get_instance_cost(self, instance_type):
+    def get_instance_cost(self, host):
         #get prices for on-demand instances
         url = 'https://pricing.us-east-1.amazonaws.com'
         content = requests.get(url + '/offers/v1.0/aws/index.json').content.decode('utf8')
@@ -854,6 +876,8 @@ class AWSCloudProvider(BaseCloudProvider):
 
         offer_file.close()
 
+        instance_type = host.size.instance_id
+
         sku = None
         price_per_unit = 0.0
 
@@ -877,17 +901,16 @@ class AWSCloudProvider(BaseCloudProvider):
         return price_per_unit
 
     def get_host_definition_cost(self, host):
-        instance_type = host.size.instance_id
         count = host.count
         is_spot_instance = host.spot_price is not None
 
         total = 0.0
 
         if is_spot_instance:
-            spot_cost = self.get_spot_instance_cost(instance_type)
+            spot_cost = self.get_spot_instance_cost(host)
             total += spot_cost*count
         else:
-            instance_cost = self.get_instance_cost(instance_type)
+            instance_cost = self.get_instance_cost(host)
             total += instance_cost*count
 
         #todo pull this from the ec2 pricing as well
@@ -897,7 +920,6 @@ class AWSCloudProvider(BaseCloudProvider):
 
         hourly_ebs_cost = gb*0.1/31/24
         total += hourly_ebs_cost
-
 
         return total
 

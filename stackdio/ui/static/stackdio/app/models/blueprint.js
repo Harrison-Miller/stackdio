@@ -75,7 +75,7 @@ define([
     Blueprint.prototype._process = function (raw) {
         this.title(raw.title);
         this.description(raw.description);
-        this.total_cost(raw.total_cost);
+        this.total_cost(Math.floor(raw.total_cost*1000)/1000);
         this.createUsers(raw.create_users);
         this.labelList(raw.label_list);
         this.stackCount(raw.stack_count);
