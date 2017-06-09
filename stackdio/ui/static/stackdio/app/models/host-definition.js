@@ -42,6 +42,7 @@ define([
         // Editable fields
         this.title = ko.observable();
         this.description = ko.observable();
+        this.cost = ko.observable();
         this.cloudImage = ko.observable();
         this.count = ko.observable();
         this.hostnameTemplate = ko.observable();
@@ -70,6 +71,7 @@ define([
     HostDefinition.prototype._process = function (raw) {
         this.title(raw.title);
         this.description(raw.description);
+        this.cost(raw.cost);
         this.cloudImage(raw.cloud_image);
         this.count(raw.count);
         this.hostnameTemplate(raw.hostname_template);

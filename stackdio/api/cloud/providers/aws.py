@@ -27,6 +27,8 @@ import stat
 from time import sleep
 from uuid import uuid4
 
+import json
+import requests
 import boto
 import boto.ec2
 import boto.vpc
@@ -805,6 +807,99 @@ class AWSCloudProvider(BaseCloudProvider):
 
         # update hosts to remove fqdn
         hosts.update(fqdn='')
+
+    def get_spot_instance_cost(self, instance_type):
+        return 0.1
+
+    #this is still highly inefficient, it might be best just to store the cost in the db and hope it doesn't change
+    def get_instance_cost(self, instance_type):
+        #get prices for on-demand instances
+        url = 'https://pricing.us-east-1.amazonaws.com'
+        content = requests.get(url + '/offers/v1.0/aws/index.json').content.decode('utf8')
+        index_json = json.loads(content)
+        ec2_endpoints = index_json['offers']['AmazonEC2']
+
+        content = requests.get(url + ec2_endpoints['currentRegionIndexUrl']).content.decode('utf8')
+        regions_json = json.loads(content)
+
+        prices_json = {}
+
+        if os.path.isfile(self.provider_storage + '/aws-offers.json'):
+            offer_file = open(self.provider_storage + '/aws-offers.json', 'r')
+            prices_json = json.loads(offer_file.read())
+            offer_file.close()
+
+        current_publication_date = prices_json.get('publicationDate')
+        new_publication_date = regions_json['publicationDate']
+
+        fetch_prices = False
+
+        #check if we need to get a new version of the offers file
+        if current_publication_date is None or current_publication_date != new_publication_date:
+            fetch_prices = True
+
+        #we cache the offers file because it's 10+ mb
+        if fetch_prices:
+            config_data = self.get_config()
+            region = config_data['location']
+            prices_endpoint = regions_json['regions'][region]['currentVersionUrl']
+
+            content = requests.get(url + prices_endpoint).content.decode('utf8')
+
+            offer_file = open(self.provider_storage + '/aws-offers.json', 'w')
+            offer_file.write(content)
+            offer_file.close()
+
+            prices_json = json.loads(content)
+
+        offer_file.close()
+
+        sku = None
+        price_per_unit = 0.0
+
+        products = prices_json['products']
+        for product_name in products:
+            product = products[product_name]
+            if product['attributes'].get('instanceType') is not None:
+                if product['attributes']['instanceType'] == instance_type:
+                    operating_system = product['attributes']['operatingSystem']
+                    tenancy = product['attributes']['tenancy']
+                    if operating_system == 'Linux' and tenancy == 'Shared':
+                        sku = product['sku']
+                        break
+
+        if sku is not None:
+            offers = prices_json['terms']['OnDemand'][sku]
+            offer = offers[offers.keys()[0]]
+            dimensions = offer['priceDimensions']
+            price_per_unit = float(dimensions[dimensions.keys()[0]]['pricePerUnit']['USD'])
+
+        return price_per_unit
+
+    def get_host_definition_cost(self, host):
+        instance_type = host.size.instance_id
+        count = host.count
+        is_spot_instance = host.spot_price is not None
+
+        total = 0.0
+
+        if is_spot_instance:
+            spot_cost = self.get_spot_instance_cost(instance_type)
+            total += spot_cost*count
+        else:
+            instance_cost = self.get_instance_cost(instance_type)
+            total += instance_cost*count
+
+        #todo pull this from the ec2 pricing as well
+        gb = 0
+        for volume in host.volumes.all():
+            gb += volume.size_in_gb
+
+        hourly_ebs_cost = gb*0.1/31/24
+        total += hourly_ebs_cost
+
+
+        return total
 
     def register_volumes_for_delete(self, hosts):
         ec2 = self.connect_ec2()

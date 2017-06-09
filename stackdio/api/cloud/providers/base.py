@@ -24,6 +24,7 @@ from django.conf import settings
 from rest_framework.serializers import ValidationError
 
 from stackdio.core.constants import Health
+from stackdio.api.blueprints.models import BlueprintHostDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -219,3 +220,6 @@ class BaseCloudProvider(object):
         for the given cloud provider (e.g., Route53 on AWS)
         """
         raise NotImplementedError()
+
+    def get_host_definition_cost(self, host):
+        return 0
