@@ -251,6 +251,8 @@ class BlueprintHostDefinitionSerializer(CreateOnlyFieldsMixin,
             volume['host'] = host_definition
         volume_field.create(volumes)
 
+        host_definition.recalculate_cost()
+
         return host_definition
 
 

@@ -118,7 +118,10 @@ class Blueprint(TimeStampedModel, TitleSlugDescriptionModel):
         sum = 0.0
 
         for host_definition in self.host_definitions.all():
-            sum += host_definition.cost()
+            if host_definition.cost is None:
+                host_definition.recalculate_cost()
+                host_definition.save()
+            sum += float(host_definition.cost)
 
         return sum
 
@@ -191,10 +194,16 @@ class BlueprintHostDefinition(TimeStampedModel, TitleDescriptionModel):
     # Grab the list of formula components
     formula_components = GenericRelation('formulas.FormulaComponent')
 
-    def cost(self):
+    cost = models.DecimalField(max_digits=5,
+                               decimal_places=2,
+                               blank=True,
+                               null=True,
+                               default=None)
+
+    def recalculate_cost(self):
         driver = self.cloud_image.get_driver()
         amount = driver.get_host_definition_cost(self)
-        return amount
+        self.cost = amount
 
     @property
     def formula_components_count(self):
